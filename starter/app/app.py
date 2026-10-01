@@ -139,19 +139,22 @@ def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
     does have one scores the same as a wrong guess -- so refusal is safe to use
     honestly and useless to use defensively.
 
-    The top vector hits are printed for inspection. They are not the answer.
+    The value has to be copied from a retrieved passage. A passage that does
+    not contain it is not cited.
     """
-    _print_hits(query)
-    return "", [], 0.0
-
-
-def _print_hits(query: str) -> None:
     if not (INDEX_DIR / "chunks.json").is_file():
         print("no vector index — run --index first")
-        return
+        return "", [], 0.0
     from search import search
 
     hits = search(INDEX_DIR, query)
+    _print_hits(hits)
+    from answer import decide
+
+    return decide(query, hits, INDEX_DIR)
+
+
+def _print_hits(hits: list[dict]) -> None:
     print(f"hits {len(hits)}")
     for hit in hits:
         preview = " ".join(hit["text"].split())

@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import errno
 import io
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -153,8 +154,47 @@ def _image(path: Path) -> str:
     result, _ = _ocr_engine()(str(path))
     if not result:
         return ""
-    lines = [str(item[1]).strip() for item in result if len(item) > 1 and str(item[1]).strip()]
-    return "\n".join(lines)
+    items = []
+    for item in result:
+        text = str(item[1]).strip()
+        if not text or not item[0]:
+            continue
+        xs = [point[0] for point in item[0]]
+        ys = [point[1] for point in item[0]]
+        items.append({"text": text, "x": sum(xs) / len(xs), "y": sum(ys) / len(ys)})
+    return "\n".join(_pair_rows(items))
+
+
+def _pair_rows(items: list[dict]) -> list[str]:
+    """Put a label on the same line as the pin drawn above it.
+
+    OCR reads the boxes left to right, so the signal ends up far from its pin.
+    The coordinates put THERM_ALERT# back on B14.
+    """
+    pins = [item for item in items if re.fullmatch(r"B\d+", item["text"])]
+    if len(pins) < 2:
+        return [item["text"] for item in sorted(items, key=lambda item: (item["y"], item["x"]))]
+    pin_y = min(pin["y"] for pin in pins)
+    lines = []
+    used = set()
+    for item in sorted(items, key=lambda item: (item["y"], item["x"])):
+        if item["y"] < pin_y - 20:
+            lines.append(item["text"])
+            used.add(id(item))
+    paired = []
+    prose = []
+    for item in items:
+        if id(item) in used or item in pins:
+            continue
+        nearest = min(pins, key=lambda pin: abs(pin["x"] - item["x"]))
+        if abs(nearest["x"] - item["x"]) < 40 and 0 < item["y"] - nearest["y"] < 120:
+            paired.append((nearest, item))
+        else:
+            prose.append(item)
+    for pin, item in sorted(paired, key=lambda pair: pair[0]["x"]):
+        lines.append(f"{pin['text']} {item['text']}")
+    lines.extend(item["text"] for item in sorted(prose, key=lambda item: (item["y"], item["x"])))
+    return lines
 
 
 def _ocr_engine():
