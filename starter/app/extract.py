@@ -17,8 +17,7 @@ import io
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Text we can read in this step. Images are listed and deferred: the answer
-# is printed inside the picture, so a text parser cannot see it.
+# Images are read with OCR. The answer is printed in the picture, not in a text file.
 TEXT_SUFFIXES = {
     ".pdf": "pdf",
     ".docx": "docx",
@@ -97,11 +96,9 @@ def _take_file(corpus: Path, path: Path, report: WalkReport) -> None:
     relative = _rel(corpus, path)
     suffix = path.suffix.lower()
     if suffix in IMAGE_SUFFIXES:
-        report.skipped.append(
-            Skipped(path=relative, reason="image; text inside it is read in a later step")
-        )
-        return
-    kind = TEXT_SUFFIXES.get(suffix)
+        kind = "image"
+    else:
+        kind = TEXT_SUFFIXES.get(suffix)
     if kind is None:
         report.skipped.append(Skipped(path=relative, reason=f"unknown type {suffix or '(no suffix)'}"))
         return
@@ -127,7 +124,10 @@ def _take_file(corpus: Path, path: Path, report: WalkReport) -> None:
                 Skipped(path=relative, reason=f"unreadable: {error.__class__.__name__}: {error}")
             )
     else:
-        report.documents.append(Document(path=relative, kind=kind, text=text))
+        if not text.strip():
+            report.skipped.append(Skipped(path=relative, reason="no readable text"))
+        else:
+            report.documents.append(Document(path=relative, kind=kind, text=text))
 
 
 def _is_encrypted_error(error: Exception) -> bool:
@@ -136,6 +136,8 @@ def _is_encrypted_error(error: Exception) -> bool:
 
 
 def extract_text(path: Path, kind: str) -> str:
+    if kind == "image":
+        return _image(path)
     if kind == "pdf":
         return _pdf(path)
     if kind == "docx":
@@ -145,6 +147,26 @@ def extract_text(path: Path, kind: str) -> str:
     if kind == "csv":
         return _csv(path)
     return _plain(path)
+
+
+def _image(path: Path) -> str:
+    result, _ = _ocr_engine()(str(path))
+    if not result:
+        return ""
+    lines = [str(item[1]).strip() for item in result if len(item) > 1 and str(item[1]).strip()]
+    return "\n".join(lines)
+
+
+def _ocr_engine():
+    global _OCR
+    if _OCR is None:
+        from rapidocr_onnxruntime import RapidOCR
+
+        _OCR = RapidOCR()
+    return _OCR
+
+
+_OCR = None
 
 
 def _pdf(path: Path) -> str:
