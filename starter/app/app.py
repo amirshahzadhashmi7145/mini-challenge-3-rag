@@ -110,7 +110,11 @@ def index(corpus: Path) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    from search import index_documents
+
+    count = index_documents(report.documents, INDEX_DIR)
     _print_walk(report)
+    print(f"chunks {count}")
 
 
 def _print_walk(report) -> None:
@@ -134,8 +138,27 @@ def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
     question that has no answer in the corpus, and refusing on a question that
     does have one scores the same as a wrong guess -- so refusal is safe to use
     honestly and useless to use defensively.
+
+    The top vector hits are printed for inspection. They are not the answer.
     """
+    _print_hits(query)
     return "", [], 0.0
+
+
+def _print_hits(query: str) -> None:
+    if not (INDEX_DIR / "chunks.json").is_file():
+        print("no vector index — run --index first")
+        return
+    from search import search
+
+    hits = search(INDEX_DIR, query)
+    print(f"hits {len(hits)}")
+    for hit in hits:
+        preview = " ".join(hit["text"].split())
+        if len(preview) > 140:
+            preview = preview[:140] + "..."
+        print(f"  {hit['score']:.2f}  {hit['path']}")
+        print(f"       {preview}")
 
 
 def main() -> int:
