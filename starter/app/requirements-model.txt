@@ -1,0 +1,6 @@
+# The language model. Install this in the local venv.
+# Do not add it to requirements.txt: a normal pip install of these packages
+# can replace the ROCm torch in the Docker base image.
+transformers>=4.44
+accelerate>=0.33
+torch
