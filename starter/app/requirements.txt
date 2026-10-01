@@ -1,4 +1,7 @@
-# The starter server itself needs nothing beyond the standard library.
-# Add whatever your model needs, e.g.:
-#   transformers>=4.44
-#   pillow>=10.0
+# Document parsers for the index walk. None of these depend on torch, so a
+# normal install does not replace the ROCm build in the base image.
+# When a later step installs a torch-related package, use pip --no-deps.
+pypdf>=5.0
+cryptography>=3.1
+python-docx>=1.1
+openpyxl>=3.1
