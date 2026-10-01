@@ -93,8 +93,34 @@ def index(corpus: Path) -> None:
     Walk defensively: catch per-file, keep going, and record what you could not
     read rather than aborting. See the third bullet in the module docstring.
     """
+    from extract import walk_corpus
+
     INDEX_DIR.mkdir(parents=True, exist_ok=True)
-    # Your work goes here.
+    report = walk_corpus(corpus)
+    payload = {
+        "documents": [
+            {"path": doc.path, "kind": doc.kind, "text": doc.text}
+            for doc in report.documents
+        ],
+        "skipped": [
+            {"path": item.path, "reason": item.reason} for item in report.skipped
+        ],
+    }
+    (INDEX_DIR / "extracted.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    _print_walk(report)
+
+
+def _print_walk(report) -> None:
+    """Show what the walk kept and what it left behind. Not read by the grader."""
+    print(f"parsed {len(report.documents)}")
+    for doc in report.documents:
+        print(f"  kept   {doc.path}  ({doc.kind}, {len(doc.text)} chars)")
+    print(f"skipped {len(report.skipped)}")
+    for item in report.skipped:
+        print(f"  skip   {item.path}  ({item.reason})")
 
 
 def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
