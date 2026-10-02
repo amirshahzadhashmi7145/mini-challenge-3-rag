@@ -20,10 +20,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt \
  && pip install --no-cache-dir filelock huggingface-hub packaging pyyaml regex requests safetensors tokenizers tqdm \
  && python3 -c "import torch; v=torch.__version__; assert '+rocm' in v, v; print('torch', v)"
 
-COPY app/ /app/
-
 # Weights are downloaded while the build still has a network. The running
 # container does not. HF_HUB_OFFLINE is set only after the download.
+# This layer is before the app copy so a code change does not download again.
 ENV HF_HOME=/models/hf \
     FASTEMBED_CACHE_PATH=/models/fastembed \
     MC3_LLM=Qwen/Qwen2.5-1.5B-Instruct \
@@ -34,6 +33,14 @@ ENV HF_HOME=/models/hf \
 RUN mkdir -p /models/hf /models/fastembed /app/corpus /app/output /app/index \
  && python3 -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen2.5-1.5B-Instruct')" \
  && python3 -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/models/fastembed')"
+
+# OCR opens images through OpenCV. The base image has no display libraries,
+# so both pictures were skipped and those questions were answered from other files.
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libxcb1 libgl1 libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY app/ /app/
 
 ENV HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1

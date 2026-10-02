@@ -17,13 +17,10 @@ SOCKET_PATH = os.environ.get("MC3_SOCKET", "/tmp/mc3-answer.sock")
 
 
 def main() -> None:
-    from answer import _generate, _load
+    from answer import _load
 
     print("loading model", flush=True)
     _load()
-    # One throwaway pass. On this laptop the GPU kernel fails here, and the
-    # model drops to CPU before any graded question is asked.
-    _generate("ANSWER:\nSOURCES:")
     path = Path(SOCKET_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
