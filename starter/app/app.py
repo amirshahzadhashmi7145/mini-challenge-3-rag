@@ -145,6 +145,12 @@ def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
     if not (INDEX_DIR / "chunks.json").is_file():
         print("no vector index — run --index first")
         return "", [], 0.0
+    remote = _ask_server(query)
+    if remote is not None:
+        text, citations, confidence = remote
+        print(f"via server answer={text!r} citations={citations}")
+        return text, citations, confidence
+    print("model server is not running; loading the model in this process")
     from search import search
 
     hits = search(INDEX_DIR, query)
@@ -152,6 +158,42 @@ def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
     from answer import decide
 
     return decide(query, hits, INDEX_DIR)
+
+
+def _ask_server(query: str) -> tuple[str, list[str], float] | None:
+    import socket
+    import struct
+
+    path = os.environ.get("MC3_SOCKET", "/tmp/mc3-answer.sock")
+    if not os.path.exists(path):
+        return None
+    connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    connection.settimeout(120)
+    try:
+        connection.connect(path)
+    except OSError:
+        return None
+    payload = json.dumps({"query": query, "index": str(INDEX_DIR)}).encode()
+    connection.sendall(struct.pack(">I", len(payload)) + payload)
+    header = _exact(connection, 4)
+    size = struct.unpack(">I", header)[0]
+    body = json.loads(_exact(connection, size))
+    connection.close()
+    if body.get("error"):
+        raise RuntimeError(body["error"])
+    return body["answer"], list(body["citations"]), float(body["confidence"])
+
+
+def _exact(connection, size: int) -> bytes:
+    chunks = []
+    remaining = size
+    while remaining:
+        piece = connection.recv(remaining)
+        if not piece:
+            raise ConnectionError("socket closed")
+        chunks.append(piece)
+        remaining -= len(piece)
+    return b"".join(chunks)
 
 
 def _print_hits(hits: list[dict]) -> None:
