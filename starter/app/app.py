@@ -174,12 +174,26 @@ def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
     return decide(query, hits, INDEX_DIR)
 
 
+def _wait_for_socket(path: str) -> bool:
+    """The server creates the socket after the model has loaded."""
+    import time
+
+    wait = float(os.environ.get("MC3_WAIT_SOCKET", "0"))
+    deadline = time.time() + wait
+    while True:
+        if os.path.exists(path):
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(0.2)
+
+
 def _ask_server(query: str) -> tuple[str, list[str], float] | None:
     import socket
     import struct
 
     path = os.environ.get("MC3_SOCKET", "/tmp/mc3-answer.sock")
-    if not os.path.exists(path):
+    if not _wait_for_socket(path):
         return None
     connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     connection.settimeout(120)
