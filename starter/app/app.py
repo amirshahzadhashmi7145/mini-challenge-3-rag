@@ -115,6 +115,13 @@ def index(corpus: Path) -> None:
     count = index_documents(report.documents, INDEX_DIR)
     _print_walk(report)
     print(f"chunks {count}")
+    # Model load belongs to startup, which is this index pass, not to a question.
+    if os.environ.get("MC3_WAIT_SOCKET"):
+        socket_path = os.environ.get("MC3_SOCKET", "/tmp/mc3-answer.sock")
+        if _wait_for_socket(socket_path, 180):
+            print("model server ready")
+        else:
+            print("model server was not ready")
 
 
 def _print_walk(report) -> None:
@@ -160,11 +167,12 @@ def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
     return decide(query, hits, INDEX_DIR)
 
 
-def _wait_for_socket(path: str) -> bool:
+def _wait_for_socket(path: str, wait: float | None = None) -> bool:
     """The server creates the socket after the model has loaded."""
     import time
 
-    wait = float(os.environ.get("MC3_WAIT_SOCKET", "0"))
+    if wait is None:
+        wait = float(os.environ.get("MC3_WAIT_SOCKET", "0"))
     deadline = time.time() + wait
     while True:
         if os.path.exists(path):
