@@ -56,13 +56,13 @@ def search(index_dir: Path, query: str, k: int = TOP_K) -> list[dict]:
     return hits
 
 
+_EMBED = None
+
+
 def _embed(texts: list[str], queries: bool) -> np.ndarray:
     if not texts:
         return np.zeros((0, 0), dtype=np.float32)
-    from fastembed import TextEmbedding
-
-    model = TextEmbedding(model_name=MODEL_NAME, cache_dir=str(_cache_dir()))
-    rows = list(model.query_embed(texts) if queries else model.embed(texts))
+    rows = list(_embedding_model().query_embed(texts) if queries else _embedding_model().embed(texts))
     matrix = np.asarray(rows, dtype=np.float32)
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
@@ -79,6 +79,15 @@ def _save(index_dir: Path, chunks: list[dict], vectors: np.ndarray) -> None:
     index = faiss.IndexFlatIP(vectors.shape[1])
     index.add(np.ascontiguousarray(vectors))
     faiss.write_index(index, str(index_dir / _VECTORS))
+
+
+def _embedding_model():
+    global _EMBED
+    if _EMBED is None:
+        from fastembed import TextEmbedding
+
+        _EMBED = TextEmbedding(model_name=MODEL_NAME, cache_dir=str(_cache_dir()))
+    return _EMBED
 
 
 def _cache_dir() -> Path:
