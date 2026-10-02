@@ -12,3 +12,4 @@ numpy>=1.26
 # OCR for text printed inside images. Does not depend on torch.
 rapidocr-onnxruntime>=1.2.3
 pillow>=10.0
+rank-bm25>=0.2.2

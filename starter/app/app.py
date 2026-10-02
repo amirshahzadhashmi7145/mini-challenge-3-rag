@@ -122,6 +122,17 @@ def index(corpus: Path) -> None:
             print("model server ready")
         else:
             print("model server was not ready")
+    from search import chunk_document
+
+    chunks = []
+    for doc in report.documents:
+        chunks.extend(chunk_document(doc.path, doc.kind, doc.text))
+    (INDEX_DIR / "chunks.json").write_text(
+        json.dumps({"chunks": chunks}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    _print_walk(report)
+    print(f"chunks {len(chunks)}")
 
 
 def _print_walk(report) -> None:
@@ -148,6 +159,9 @@ def answer(corpus: Path, query: str) -> tuple[str, list[str], float]:
 
     The value has to be copied from a retrieved passage. A passage that does
     not contain it is not cited.
+    The top vector hits are printed for inspection. They are not the answer.
+    Search results are printed for inspection. They are not the answer: a
+    matching passage can be a decoy, and the graded citation must be exact.
     """
     if not (INDEX_DIR / "chunks.json").is_file():
         print("no vector index — run --index first")
@@ -219,6 +233,14 @@ def _exact(connection, size: int) -> bytes:
 
 
 def _print_hits(hits: list[dict]) -> None:
+    path = INDEX_DIR / "chunks.json"
+    if not path.is_file():
+        print("no chunks.json — run --index first")
+        return
+    from search import search_chunks
+
+    chunks = json.loads(path.read_text(encoding="utf-8"))["chunks"]
+    hits = search_chunks(chunks, query)
     print(f"hits {len(hits)}")
     for hit in hits:
         preview = " ".join(hit["text"].split())
